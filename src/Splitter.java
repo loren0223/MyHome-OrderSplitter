@@ -6,10 +6,13 @@ import org.apache.log4j.Logger;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+import utilities.Arith;
+import utilities.FileUtils;
+
 public class Splitter 
 {
 	static double[] sSubCount = new double[6];
-	static Logger logger = Logger.getRootLogger();
+	static Logger logger = Logger.getLogger(Splitter.class.getName());
 	
 	public Splitter(){}
 	
@@ -17,28 +20,33 @@ public class Splitter
 	 * @param args
 	 */
 	public static void main(String[] args){
+		logger.info("********* 開始拆單作業 ************");
 		try{
 			/*
 			 * 匯入原始訂單進行出貨單拆單作業。
 			 */
-			logger.info("********* 開始拆單作業 ************");
-			
 			String dir = "./";
 			String extension = "xlsx";
-			
 			File[] files = FileUtils.listFiles(dir, extension);
+			String destination = "./已拆單/";
 			
-			logger.info("檔案(*.xlsx)數量 is "+files.length);
+			File fileDir = new File(destination);
+	    	if (!fileDir.exists()) 
+	    	{
+	    		fileDir.mkdirs();
+	    	}
+			
+			logger.info("訂單檔案數量=["+files.length+"]");
 			
 			for(int i=0; i<files.length; i++){
 				File file = files[i];
 				String filename = file.getName();
 				String fileOutputName = filename.substring(0, filename.length()-5)+"(黑貓專用)."+extension;
 				
-				logger.info("處理拆單#("+(i+1)+"): "+file.getName());
+				logger.info("\t處理拆單#"+(i+1)+"=["+filename+"]");
 				
 				if(filename.contains("黑貓")) {
-					logger.warn("拆單忽略: 不處理已拆訂單!");
+					logger.warn("\t\t拆單忽略: 不處理已拆訂單!");
 					continue;
 				}
 				
@@ -50,18 +58,17 @@ public class Splitter
 					//Read
 					List<String[]> list = s.readFile(dir+filename);
 					//Split
-					s.writeFile(list, dir+fileOutputName);
+					s.writeFile(list, destination+fileOutputName);
 					//Successful and display the output file path
-					logger.info("拆單成功: "+fileOutputName);
+					logger.info("\t\t拆單成功: "+fileOutputName);
 				}catch(Exception ex){
-					logger.error("拆單失敗: "+ex.getMessage());
+					logger.error("\t\t拆單失敗: "+ex.getMessage());
 				}
 			}
-			
-		}
-		catch(Exception ex){
+		}catch(Exception ex){
 			logger.error(ex.getMessage());
 		}
+		logger.info("********* 結束拆單作業 ************");
 	}
 	
 	/*
@@ -96,8 +103,16 @@ public class Splitter
 	    	String receiverMobile = getCellValue(row, row.getCell(17));
 	    	String receiverAddress = getCellValue(row, row.getCell(18));
 	    	
-	    	String receiveDate = getCellValue(row, row.getCell(19));
-	    	String sentDate = getCellValue(row, row.getCell(24));
+	    	String receiveDate = getCellValue(row, row.getCell(19)); //希望送達日
+	    	String sentDate = getCellValue(row, row.getCell(24)); //出貨日
+	    	
+	    	String receiveTime = getCellValue(row, row.getCell(20)); //收件時段
+	    	String paymentType = getCellValue(row, row.getCell(21)); //付款方式
+	    	if(receiveTime.equals("")) receiveTime = "不指定";
+	    	if(paymentType.equals("")) paymentType = "宅急便";
+	    	if(paymentType.equals("銀行匯款")) paymentType = "宅急便";
+	    	if(paymentType.contains("貨到付款")) paymentType = "宅急便客樂得";
+	    	
 	    	
 	    	//取得訂單數量:23#/25#/27#/30#/柳丁/甜丁
 	    	//如果數量沒有填寫，就當作 0
@@ -130,13 +145,13 @@ public class Splitter
 	    	boolean skipThisRow = false;
 	    	//如果收件人沒地址，顯示 "收件人沒有地址!(第n列)"。
 	    	if(receiverAddress.equals("")){
-	    		logger.warn("<<< \u6536\u4ef6\u4eba\u6c92\u6709\u5730\u5740!(\u7b2c"+(rownum+1)+"\u5217) >>>");
+	    		logger.warn("\t\t\u6536\u4ef6\u4eba\u6c92\u6709\u5730\u5740!(\u7b2c"+(rownum+1)+"\u5217)");
 	    		skipThisRow = true;
 	    	}
 	    	//如果訂單沒有指定數量，顯示"有訂單沒有指定數量喔!(第n列)"。
 	    	double totalCount = Arith.add(Arith.add(Arith.add(sCount, dOrangeWhiteBox), dSweetOrangeWhiteBox), sCount2); 
-	    	if(totalCount == 0){
-	    		logger.warn("<<< \u6709\u8a02\u55ae\u6c92\u6709\u6307\u5b9a\u6578\u91cf\u5594!(\u7b2c"+ (rownum+1) +"\u5217) >>>");
+	    	if(totalCount == 0 && !sender.equals("n/a")){
+	    		logger.warn("\t\t\u6709\u8a02\u55ae\u6c92\u6709\u6307\u5b9a\u6578\u91cf\u5594!(\u7b2c"+ (rownum+1) +"\u5217)");
 	    		skipThisRow = true;
 	    	}
 	    	//如果有上述任一種情形，忽略這筆資料。
@@ -173,7 +188,7 @@ public class Splitter
 	    	sSubCount[3] = d30GiftBox;
 	    	//設定分成幾張出貨單
 	    	for(int i=1; i<=sSplitCount; i++){
-	    		String[] record = new String[10];
+	    		String[] record = new String[12];
 	    		record[0] = sender;
 	    		record[1] = senderTel;
 	    		record[2] = senderMobile;
@@ -184,7 +199,11 @@ public class Splitter
 	    		record[7] = receiveDate;
 	    		record[8] = sentDate;
 	    		//record[9] = sSplitCount==1? this.genSplitItemName2014(sSubCount,packType) : this.genSplitItemName2014(sSubCount,packType)+"("+i+"/"+(int)sSplitCount+")";
-	    		record[9] = sShipCount==1? this.genSplitItemName2015(sSubCount) : this.genSplitItemName2015(sSubCount) + "  ("+shipIndex+"/"+(int)sShipCount+")";
+	    		record[9] = sShipCount==1? this.genSplitItemName2015(sSubCount) : this.genSplitItemName2015(sSubCount) + "  ("+(int)sShipCount+"-"+shipIndex+")";
+	    		
+	    		record[10] = receiveTime;
+	    		record[11] = paymentType.equals("宅急便客樂得") && shipIndex==1? "宅急便客樂得" : "宅急便";
+	    		
 	    		list.add(record);
 	    		//出貨總件數項次加1
 	    		shipIndex++;
@@ -195,7 +214,7 @@ public class Splitter
 	    	 * 萬國碼: \u8302\u8c3723#(\u767d\u7bb125\u65a4)x1
 	    	 */
 	    	for(int x=1; x<=d23WhiteBox; x++){
-	    		String[] record = new String[10];
+	    		String[] record = new String[12];
 	    		record[0] = sender;
 	    		record[1] = senderTel;
 	    		record[2] = senderMobile;
@@ -205,7 +224,11 @@ public class Splitter
 	    		record[6] = receiverAddress;
 	    		record[7] = receiveDate;
 	    		record[8] = sentDate;
-	    		record[9] = "\u8302\u8c3723#(\u767d\u7bb125\u65a4)x1" + "  ("+shipIndex+"/"+(int)sShipCount+")";
+	    		record[9] = sShipCount==1? "茂谷23#(白箱25斤)x1" : "茂谷23#(白箱25斤)x1" + "  ("+(int)sShipCount+"-"+shipIndex+")";
+	    		
+	    		record[10] = receiveTime;
+	    		record[11] = paymentType.equals("宅急便客樂得") && shipIndex==1? "宅急便客樂得" : "宅急便";
+	    		
 	    		list.add(record);
 	    		//出貨總件數項次加1
 	    		shipIndex++;
@@ -216,7 +239,7 @@ public class Splitter
 	    	 * 萬國碼: \u8302\u8c3725#(\u767d\u7bb125\u65a4)x1
 	    	 */
 	    	for(int x=1; x<=d25WhiteBox; x++){
-	    		String[] record = new String[10];
+	    		String[] record = new String[12];
 	    		record[0] = sender;
 	    		record[1] = senderTel;
 	    		record[2] = senderMobile;
@@ -226,7 +249,11 @@ public class Splitter
 	    		record[6] = receiverAddress;
 	    		record[7] = receiveDate;
 	    		record[8] = sentDate;
-	    		record[9] = "\u8302\u8c3725#(\u767d\u7bb125\u65a4)x1" + "  ("+shipIndex+"/"+(int)sShipCount+")";
+	    		record[9] = sShipCount==1? "茂谷25#(白箱25斤)x1" : "茂谷25#(白箱25斤)x1" + "  ("+(int)sShipCount+"-"+shipIndex+")";
+
+	    		record[10] = receiveTime;
+	    		record[11] = paymentType.equals("宅急便客樂得") && shipIndex==1? "宅急便客樂得" : "宅急便";
+	    		
 	    		list.add(record);
 	    		//出貨總件數項次加1
 	    		shipIndex++;
@@ -237,7 +264,7 @@ public class Splitter
 	    	 * 萬國碼: \u8302\u8c3727#(\u767d\u7bb125\u65a4)x1
 	    	 */
 	    	for(int x=1; x<=d27WhiteBox; x++){
-	    		String[] record = new String[10];
+	    		String[] record = new String[12];
 	    		record[0] = sender;
 	    		record[1] = senderTel;
 	    		record[2] = senderMobile;
@@ -247,7 +274,11 @@ public class Splitter
 	    		record[6] = receiverAddress;
 	    		record[7] = receiveDate;
 	    		record[8] = sentDate;
-	    		record[9] = "\u8302\u8c3727#(\u767d\u7bb125\u65a4)x1" + "  ("+shipIndex+"/"+(int)sShipCount+")";
+	    		record[9] = sShipCount==1? "茂谷27#(白箱25斤)x1" : "茂谷27#(白箱25斤)x1" + "  ("+(int)sShipCount+"-"+shipIndex+")";
+
+	    		record[10] = receiveTime;
+	    		record[11] = paymentType.equals("宅急便客樂得") && shipIndex==1? "宅急便客樂得" : "宅急便";
+	    		
 	    		list.add(record);
 	    		//出貨總件數項次加1
 	    		shipIndex++;
@@ -258,7 +289,7 @@ public class Splitter
 	    	 * 萬國碼: \u8302\u8c3730#(\u767d\u7bb125\u65a4)x1
 	    	 */
 	    	for(int x=1; x<=d30WhiteBox; x++){
-	    		String[] record = new String[10];
+	    		String[] record = new String[12];
 	    		record[0] = sender;
 	    		record[1] = senderTel;
 	    		record[2] = senderMobile;
@@ -268,7 +299,11 @@ public class Splitter
 	    		record[6] = receiverAddress;
 	    		record[7] = receiveDate;
 	    		record[8] = sentDate;
-	    		record[9] = "\u8302\u8c3730#(\u767d\u7bb125\u65a4)x1" + "  ("+shipIndex+"/"+(int)sShipCount+")";
+	    		record[9] = sShipCount==1? "茂谷30#(白箱25斤)x1" : "茂谷30#(白箱25斤)x1" + "  ("+(int)sShipCount+"-"+shipIndex+")";
+
+	    		record[10] = receiveTime;
+	    		record[11] = paymentType.equals("宅急便客樂得") && shipIndex==1? "宅急便客樂得" : "宅急便";
+	    		
 	    		list.add(record);
 	    		//出貨總件數項次加1
 	    		shipIndex++;
@@ -279,7 +314,7 @@ public class Splitter
 	    	 * 萬國碼: \u67f3\u4e01(\u767d\u7bb125\u65a4)x1
 	    	 */
 	    	for(int x=1; x<=dOrangeWhiteBox; x++){
-	    		String[] record = new String[10];
+	    		String[] record = new String[12];
 	    		record[0] = sender;
 	    		record[1] = senderTel;
 	    		record[2] = senderMobile;
@@ -289,7 +324,11 @@ public class Splitter
 	    		record[6] = receiverAddress;
 	    		record[7] = receiveDate;
 	    		record[8] = sentDate;
-	    		record[9] = "\u67f3\u4e01(\u767d\u7bb125\u65a4)x1" + "  ("+shipIndex+"/"+(int)sShipCount+")";
+	    		record[9] = sShipCount==1? "柳丁(白箱25斤)x1" : "柳丁(白箱25斤)x1" + "  ("+(int)sShipCount+"-"+shipIndex+")";
+
+	    		record[10] = receiveTime;
+	    		record[11] = paymentType.equals("宅急便客樂得") && shipIndex==1? "宅急便客樂得" : "宅急便";
+	    		
 	    		list.add(record);
 	    		//出貨總件數項次加1
 	    		shipIndex++;
@@ -300,7 +339,7 @@ public class Splitter
 	    	 * 萬國碼: \u751c\u4e01(\u767d\u7bb125\u65a4)x1
 	    	 */
 	    	for(int x=1; x<=dSweetOrangeWhiteBox; x++){
-	    		String[] record = new String[10];
+	    		String[] record = new String[12];
 	    		record[0] = sender;
 	    		record[1] = senderTel;
 	    		record[2] = senderMobile;
@@ -310,7 +349,11 @@ public class Splitter
 	    		record[6] = receiverAddress;
 	    		record[7] = receiveDate;
 	    		record[8] = sentDate;
-	    		record[9] = "\u751c\u4e01(\u767d\u7bb125\u65a4)x1" + "  ("+shipIndex+"/"+(int)sShipCount+")";
+	    		record[9] = sShipCount==1? "甜丁(白箱25斤)x1" : "甜丁(白箱25斤)x1" + "  ("+(int)sShipCount+"-"+shipIndex+")";
+
+	    		record[10] = receiveTime;
+	    		record[11] = paymentType.equals("宅急便客樂得") && shipIndex==1? "宅急便客樂得" : "宅急便";
+	    		
 	    		list.add(record);
 	    		//出貨總件數項次加1
 	    		shipIndex++;
@@ -351,16 +394,22 @@ public class Splitter
 			Cell receiveDate = header.createCell(7);
 			Cell sentDate = header.createCell(8);
 			Cell itemName = header.createCell(9);
-			sender.setCellValue("\u5bc4\u4ef6\u4eba");
-			senderTel.setCellValue("\u5bc4\u4ef6\u4eba\u96fb\u8a71");
-			senderMobile.setCellValue("\u5bc4\u4ef6\u4eba\u624b\u6a5f");
-			receiver.setCellValue("\u6536\u4ef6\u4eba");
-			receiverTel.setCellValue("\u6536\u4ef6\u4eba\u96fb\u8a71");
-			receiverMobile.setCellValue("\u6536\u4ef6\u4eba\u624b\u6a5f");
-			receiverAddress.setCellValue("\u6536\u4ef6\u5730\u5740");
-			receiveDate.setCellValue("\u6536\u4ef6\u65e5");
-			sentDate.setCellValue("\u5bc4\u4ef6\u65e5");
-			itemName.setCellValue("\u54c1\u540d");
+			Cell receiveTime = header.createCell(10);
+			Cell paymentType = header.createCell(11);
+			
+			sender.setCellValue("寄件人");
+			senderTel.setCellValue("寄件人電話");
+			senderMobile.setCellValue("寄件人手機");
+			receiver.setCellValue("收件人");
+			receiverTel.setCellValue("收件人電話");
+			receiverMobile.setCellValue("收件人手機");
+			receiverAddress.setCellValue("收件人地址");
+			receiveDate.setCellValue("收件日");
+			sentDate.setCellValue("寄件日");
+			itemName.setCellValue("品名");
+			receiveTime.setCellValue("配送時段");
+			paymentType.setCellValue("宅配單種類");
+			
 			//輸入拆單資料
 			int size = recordList.size();
 			for(int i=0; i<size; i++){
