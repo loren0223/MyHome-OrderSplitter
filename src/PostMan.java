@@ -16,6 +16,7 @@ import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeBodyPart;
 import javax.mail.internet.MimeMessage;
 import javax.mail.internet.MimeMultipart;
+import javax.mail.internet.MimeUtility;
 
 import org.apache.log4j.Logger;
 
@@ -37,6 +38,7 @@ public class PostMan {
 	static final String TO = MailPropReader.readProperty("to");
 	static final String SUBJECT = MailPropReader.readProperty("subject");
 	static final String CONTENT = MailPropReader.readProperty("content");
+	static final String BACKUPFOLDER = MailPropReader.readProperty("backupfolder");
 	// 取得log4j logger
 	static Logger logger = Logger.getLogger(PostMan.class.getName());
 	
@@ -90,10 +92,30 @@ public class PostMan {
 				try{
 					// 夾帶附件
 					Multipart mp = new MimeMultipart();
+					
 					MimeBodyPart mbp1 = new MimeBodyPart();
-				    MimeBodyPart mbp2 = new MimeBodyPart();
-				    mbp1.setText(mailContent);
+					mbp1.setText(mailContent);
+				    
+					MimeBodyPart mbp2 = new MimeBodyPart();
 				    mbp2.attachFile(file);
+				    /*
+				     * A note on RFC 822 and MIME headers
+				     * 
+				     * RFC 822 header fields must contain only US-ASCII characters. 
+				     * MIME allows non ASCII characters to be present in certain portions 
+				     * of certain headers, by encoding those characters. RFC 2047 
+				     * specifies the rules for doing this. The MimeUtility class provided 
+				     * in this package can be used to to achieve this. Callers of the 
+				     * setHeader, addHeader, and addHeaderLine methods are responsible 
+				     * for enforcing the MIME requirements for the specified headers. 
+				     * In addition, these header fields must be folded (wrapped) before 
+				     * being sent if they exceed the line length limitation for the 
+				     * transport (1000 bytes for SMTP). Received headers may have been 
+				     * folded. The application is responsible for folding and unfolding 
+				     * headers as appropriate. 
+				     */
+				    mbp2.setFileName(MimeUtility.encodeText(filename)); //避免中文檔名會造成Outlook收到的附件檔名變成XXX.dat 
+				    
 				    mp.addBodyPart(mbp1);
 				    mp.addBodyPart(mbp2);
 				    
@@ -109,19 +131,16 @@ public class PostMan {
 				    // 寄出mail
 				    Transport.send(message);
 				    
-				    // 刪除拆單
-				    file.delete();
+				    // 將宅配單搬移到"備份"目錄
+				    try {
+				    	FileUtils.moveFile2(file, BACKUPFOLDER);
+				    }catch(IOException ioe){
+				    	logger.error("\t\t搬移檔案到[備份]目錄失敗: "+ioe.getMessage());
+				    }
 				    
 				    logger.info("\t\t郵寄完成。");
 				    
-				    // 將宅配單搬移到"已郵寄"目錄
-				    /*
-				    try {
-				    	FileUtils.moveFile2(file, "./已郵寄/");
-				    }catch(IOException ioe){
-				    	logger.error("\t\t搬移檔案到[已郵寄]目錄失敗: "+ioe.getMessage());
-				    }
-				    */
+				    
 				}catch(MessagingException ex){
 					logger.error("\t\t郵寄失敗: "+ex.getMessage());
 					
