@@ -72,7 +72,8 @@ public class PostMan {
 		
 		try{
 			// 取得Mail附件
-			String dir = "./已拆單/";
+			//String dir = "./已拆單/";
+			String dir = "d:/";
 			String extension = "xlsx";
 			File[] files = FileUtils.listFiles(dir, extension);
 			logger.info("拆單檔案數量=["+ files.length +"]");
@@ -114,7 +115,7 @@ public class PostMan {
 				     * folded. The application is responsible for folding and unfolding 
 				     * headers as appropriate. 
 				     */
-				    mbp2.setFileName(MimeUtility.encodeText(filename)); //避免中文檔名會造成Outlook收到的附件檔名變成XXX.dat 
+				    //mbp2.setFileName(MimeUtility.encodeText(filename)); //避免中文檔名會造成Outlook收到的附件檔名變成XXX.dat 
 				    
 				    mp.addBodyPart(mbp1);
 				    mp.addBodyPart(mbp2);
@@ -131,12 +132,14 @@ public class PostMan {
 				    // 寄出mail
 				    Transport.send(message);
 				    
+				    /*
 				    // 將宅配單搬移到"備份"目錄
 				    try {
 				    	FileUtils.moveFile2(file, BACKUPFOLDER);
 				    }catch(IOException ioe){
 				    	logger.error("\t\t搬移檔案到[備份]目錄失敗: "+ioe.getMessage());
 				    }
+				    */
 				    
 				    logger.info("\t\t郵寄完成。");
 				    
